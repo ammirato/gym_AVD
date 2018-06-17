@@ -29,12 +29,12 @@ class AVDEnv(gym.Env):
                               }
     action_space = Discrete(4) 
 
-    scene_img_shape = (405,720,3)
+    scene_img_shape = (1080,1920,3)
+    target_img_shape = (100,100,3)
     observation_space = Dict({'scene_image': Box(low=0,high=255,
-                                             #shape=(540,960,3),dtype=np.uint8),
                                              shape=scene_img_shape,dtype=np.uint8),
                               'target_image': Box(low=0,high=255,
-                                             shape=(100,100,3), dtype=np.uint8)})
+                                             shape=target_img_shape, dtype=np.uint8)})
         
     
     target_data = None                
@@ -55,7 +55,6 @@ class AVDEnv(gym.Env):
 
             Valid actions: 'forward', 'backward', 'rotate_cw', 'rotate_ccw'
         '''
-        r_mult = 50
 
         self.num_steps +=1 
         action = self.action_id_to_action_str[action]
@@ -66,19 +65,21 @@ class AVDEnv(gym.Env):
             self.current_obs = {'scene_image':self.current_scene_info[0],
                                 'target_image': self.target_imgs}
 
-        box = self.current_scene_info[1][0]
-        area = 0
-        if len(box) > 0:
-            box = box[0]
-            area = (box[3]-box[1]) * (box[2]-box[0])
-        #reward = (area/self.max_area)  * r_mult
-        reward = (1-(area/self.max_area)) * -.1
+        #r_mult = 50
+        #box = self.current_scene_info[1][0]
+        #area = 0
+        #if len(box) > 0:
+        #    box = box[0]
+        #    area = (box[3]-box[1]) * (box[2]-box[0])
+        ##reward = (area/self.max_area)  * r_mult
+        #reward = (1-(area/self.max_area)) * -.1
+        reward= -.1
         done = False
         info = {}
-        if self.current_scene_info[1][1] in self.goal_img_names:
-            reward = 1*r_mult
-            done = True
 
+        if self.current_scene_info[1][1] in self.goal_img_names:
+            reward = 1
+            done = True
         if self.num_steps >= self.max_steps:
             done =True
 
@@ -119,32 +120,38 @@ class AVDEnv(gym.Env):
                              class_id_to_name=self.id_to_name,
                              fraction_of_no_box=1)
 
-        #set goal points...top 5 biggest boxes of target in sene
-        annotations = json.load(open(os.path.join(self.AVD_path,scene,'annotations.json')))
-        target_boxes = []
-        for img_name in annotations.keys():
-            boxes = annotations[img_name]['bounding_boxes']
-            for box in boxes:
-                if box[4] == self.chosen_inst_id:
-                    area = (box[3]-box[1])*(box[2]-box[0])
-                    target_boxes.append((area,img_name))
-        target_boxes.sort(key=lambda tup: tup[0])
-        num_goals = min(len(target_boxes), 5)
-        goal_boxes = target_boxes[-1*num_goals:] 
-        self.goal_img_names = [name for _,name in goal_boxes]
-        self.max_area = target_boxes[-1][0]
+#        #set goal points...top 5 biggest boxes of target in sene
+#        annotations = json.load(open(os.path.join(self.AVD_path,scene,'annotations.json')))
+#        target_boxes = []
+#        for img_name in annotations.keys():
+#            boxes = annotations[img_name]['bounding_boxes']
+#            for box in boxes:
+#                if box[4] == self.chosen_inst_id:
+#                    area = (box[3]-box[1])*(box[2]-box[0])
+#                    target_boxes.append((area,img_name))
+#        target_boxes.sort(key=lambda tup: tup[0])
+#        num_goals = min(len(target_boxes), 5)
+#        goal_boxes = target_boxes[-1*num_goals:] 
+#        self.goal_img_names = [name for _,name in goal_boxes]
+#        self.max_area = target_boxes[-1][0]
+        self.destination_imgs = json.load(open(os.path.join(self.AVD_path,
+                                                            scene,
+                                                            'destination_images.json')))
+        self.goal_img_names = self.destination_imgs[str(self.chosen_inst_id)]
+        for ind,img_name in enumerate(self.goal_img_names):
+            self.goal_img_names[ind] = str(img_name)
 
         #get target images
-        chosen_target_paths = self.target_img_paths[self.chosen_inst_id]
-        #if not(len(chosen_target_paths) > 0):
-        #    print(self.chosen_inst_id)
-        #assert(len(chosen_target_paths)>0)
-        target_imgs = []
-        for target_type in range(len(chosen_target_paths)):
-            img = cv2.imread(random.choice(chosen_target_paths[target_type]))
-            target_imgs.append(img)
-        #assert len(target_imgs)>0, '{}'.format(self.chosen_inst_id)
-        self.target_imgs = self.match_and_concat_images_list(target_imgs)
+        try:
+            chosen_target_paths = self.target_img_paths[self.chosen_inst_id]
+            target_imgs = []
+            for target_type in range(len(chosen_target_paths)):
+                img = cv2.imread(random.choice(chosen_target_paths[target_type]))
+                target_imgs.append(img)
+            #self.target_imgs = self.match_and_concat_images_list(target_imgs)
+            self.target_imgs = self.resize_target_images(target_imgs,size=self.target_img_shape)
+        except:
+            self.target_imgs = np.zeros(self.target_img_shape)
                
         self.observation_space = Dict({'scene_image': Box(low=0,high=255,
                                                          shape=(960,540,3),
@@ -153,10 +160,17 @@ class AVDEnv(gym.Env):
                                                  shape=self.target_imgs.shape,
                                                  dtype=np.uint8)})
   
-        #pick random initial frame 
-        self.current_scene_info = self.dataset[random.choice(range(len(self.dataset)))]
+        #pick initial frame 
+        #self.current_scene_info = self.dataset[random.choice(range(len(self.dataset)))]
+        self.initial_positions = json.load(open(os.path.join(self.AVD_path,
+                                                            scene,
+                                                            'AOS_initial_positions.json')))
+        starting_poses = self.initial_positions[str(self.chosen_inst_id)] 
+        starting_name = random.choice(starting_poses)
+        starting_index = self.dataset.get_name_index(starting_name)
+        self.current_scene_info = self.dataset[starting_index]
+
         scene_img = self.current_scene_info[0]
-        
         self.current_obs = {'scene_image': scene_img,
                             'target_image': self.target_imgs}
 
@@ -170,8 +184,8 @@ class AVDEnv(gym.Env):
     def setup(self,scene_names='Home_001_1', 
                    instance_ids=[], 
                    AVD_path='', 
-                   target_path='',
-                   max_steps=300):
+                   target_path=None,
+                   max_steps=3000):
         '''
         KWARGS for init:
 
@@ -187,9 +201,7 @@ class AVDEnv(gym.Env):
                          []: all possible instances (based on scene choices)
             
             AVD_path: root directory of AVD dataset.
-
             target_path: root directory of target images
-
             max_steps: max number of steps before done
         '''
         #TODO: ensure every scene has at least one chosen instance
@@ -240,32 +252,34 @@ class AVDEnv(gym.Env):
                 instance_ids = [instance_ids]
         self.instance_ids = instance_ids
 
-
-
         #get target image paths for all target images
         #type of target image can mean different things, 
         #probably different type is different view
-        target_paths = os.listdir(target_path)
-        target_paths.sort()
-        target_imgs = {}
-        #each target gets a list of lists, one for each type dir
-        for inst_id in instance_ids:
-            target_imgs[inst_id] = []
-        for type_ind, t_dir in enumerate(target_paths):
-            for name in os.listdir(os.path.join(target_path,t_dir)):
-                if name.find('N') == -1: 
-                    obj_id = self.name_to_id[name[:name.rfind('_')]]
-                else:
-                    obj_id = self.name_to_id[name[:name.find('N')-1]]
-                #make sure object is valid, and store path
-                if obj_id in instance_ids:
-                    if len(target_imgs[obj_id]) <= type_ind:
-                        target_imgs[obj_id].append([])
-                    target_imgs[obj_id][type_ind].append(
-                                            os.path.join(target_path,t_dir,name))
-        self.target_img_paths = target_imgs
+        if target_path is not None:
+            target_paths = os.listdir(target_path)
+            target_paths.sort()
+            target_imgs = {}
+            #each target gets a list of lists, one for each type dir
+            for inst_id in instance_ids:
+                target_imgs[inst_id] = []
+            for type_ind, t_dir in enumerate(target_paths):
+                for name in os.listdir(os.path.join(target_path,t_dir)):
+                    if name.find('N') == -1: 
+                        obj_id = self.name_to_id[name[:name.rfind('_')]]
+                    else:
+                        obj_id = self.name_to_id[name[:name.find('N')-1]]
+                    #make sure object is valid, and store path
+                    if obj_id in instance_ids:
+                        if len(target_imgs[obj_id]) <= type_ind:
+                            target_imgs[obj_id].append([])
+                        target_imgs[obj_id][type_ind].append(
+                                                os.path.join(target_path,t_dir,name))
+            self.target_img_paths = target_imgs
+        else:
+            self.target_img_paths = {} 
+        self.num_steps = 0
 
-
+        return None
 
 
 
@@ -284,10 +298,11 @@ class AVDEnv(gym.Env):
 
 
     def get_scenes_instance_ids(self,scene_name):
-        in_file = open(os.path.join(self.AVD_path,scene_name,'present_instance_names.txt'))
+        in_file = open(os.path.join(self.AVD_path,scene_name,'instances_for_AOS.txt'))
         ids = []
         for line in in_file:
-            ids.append(self.name_to_id[line.split()[0]])
+            #ids.append(self.name_to_id[line.split()[0]])
+            ids.append(int(line.split()[0]))
         return ids 
 
     def get_instance_ids_with_target_images(self):
@@ -329,5 +344,35 @@ class AVDEnv(gym.Env):
             resized_img[0:img.shape[0],0:img.shape[1],:] = img 
             img_list[il] = resized_img
         return np.stack(img_list,axis=0)
+
+
+
+    def resize_target_images(img_list, size=[100,100], random_bg=False):
+        """
+        Stacks image in a list into a single ndarray 
+        Input parameters:
+            img_list: (list) list of ndarrays, images to be resized and stacked. 
+            size (optional): ([int,int]) size of resized target images. Default [100,100]
+        Returns:
+            (ndarray) a single ndarray with first dimension equal to the 
+            number of elements in the inputted img_list    
+        """
+
+        #resize and stack the images
+        for il,img in enumerate(img_list):
+            max_dim = max(img.shape)
+            scale = 100.0/max_dim
+            img = cv2.resize(img,(0,0),fx=scale,fy=scale)
+
+            if random_bg:
+                resized_img = np.random.randint(0,high=255,size=(size[0],size[1],img.shape[2]))
+            else:
+                if img.mean() < 127:
+                    resized_img = 255*np.ones((size[0],size[1],img.shape[2]))
+                else:
+                    resized_img = np.zeros((size[0],size[1],img.shape[2]))
+            resized_img[0:img.shape[0],0:img.shape[1],:] = img
+            img_list[il] = resized_img
+        return np.stack(img_list,axis=0) 
 
 
