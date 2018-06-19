@@ -83,7 +83,7 @@ class AVDEnv(gym.Env):
         if self.num_steps >= self.max_steps:
             done =True
 
-        if done and self.reset_on_done:
+        if done:
             self.current_obs = self.reset()
 
 
@@ -102,55 +102,21 @@ class AVDEnv(gym.Env):
         #choose a target and scene for this run
         #first choose scene, then an instance that is in that scene
         if self.choose_sequentially:
-            try:
-                scene = self.scene_names[self.current_scene_ind]
-            except:
-                #we are done with all scenes
-                return -1
             #update init pos
-            self.initial_positions = json.load(open(os.path.join(self.AVD_path,
-                                                                scene,
-                                                                'AOS_initial_positions.json')))
-            scene_present_ids = list(set(self.get_scenes_instance_ids(scene)) & set(self.instance_ids))
-            self.chosen_inst_id = scene_present_ids[self.current_instance_ind]
-            starting_poses = self.initial_positions[str(self.chosen_inst_id)] 
-            try:
-                self.current_init_pos_ind +=1
-                starting_name = starting_poses[self.current_init_pos_ind]
-            except:
-                #we are done with this instance
-                try:
-                    self.current_instance_ind += 1
-                    self.chosen_inst_id = scene_present_ids[self.current_instance_ind]
-                    
-                except:
-                    #we have done all instances for this scene
-                    self.current_scene_ind += 1                     
-                    try:
-                        scene = self.scene_names[self.current_scene_ind]
-                    except:
-                        #we are done with all scenes
-                        return -1
-                    self.current_instance_ind = 0 
-                    self.current_init_pos_ind = 0 
-                    self.reset()
- 
-                starting_poses = self.initial_positions[str(self.chosen_inst_id)] 
-                self.current_init_pos_ind = 0
-                starting_name = starting_poses[self.current_init_pos_ind]
-
-        else: #choose randomly
-            scene = random.choice(self.scene_names)
-            scene_present_ids = self.get_scenes_instance_ids(scene)
-            ids_with_imgs = self.get_instance_ids_with_target_images()
-            possible_inst_ids = set(scene_present_ids) & set(self.instance_ids) & set(ids_with_imgs)
-            self.chosen_inst_id = random.choice(list(possible_inst_ids))
-            #pick initial frame 
-            self.initial_positions = json.load(open(os.path.join(self.AVD_path,
-                                                                scene,
+            initial_positions = json.load(open(os.path.join(self.AVD_path,
+                                                                self.current_scene,
                                                                 'AOS_initial_positions.json')))
             starting_poses = self.initial_positions[str(self.chosen_inst_id)] 
             starting_name = random.choice(starting_poses)
+            starting_index = self.dataset.get_name_index(starting_name)
+            self.current_scene_info = self.dataset[starting_index]
+            
+        else:
+            scene = random.choice(self.scene_names)
+        scene_present_ids = self.get_scenes_instance_ids(scene)
+        ids_with_imgs = self.get_instance_ids_with_target_images()
+        possible_inst_ids = set(scene_present_ids) & set(self.instance_ids) & set(ids_with_imgs)
+        self.chosen_inst_id = random.choice(list(possible_inst_ids))
 
         #get scene images loader
         #only consider boxes from the chosen class
@@ -165,6 +131,20 @@ class AVDEnv(gym.Env):
                              class_id_to_name=self.id_to_name,
                              fraction_of_no_box=1)
 
+#        #set goal points...top 5 biggest boxes of target in sene
+#        annotations = json.load(open(os.path.join(self.AVD_path,scene,'annotations.json')))
+#        target_boxes = []
+#        for img_name in annotations.keys():
+#            boxes = annotations[img_name]['bounding_boxes']
+#            for box in boxes:
+#                if box[4] == self.chosen_inst_id:
+#                    area = (box[3]-box[1])*(box[2]-box[0])
+#                    target_boxes.append((area,img_name))
+#        target_boxes.sort(key=lambda tup: tup[0])
+#        num_goals = min(len(target_boxes), 5)
+#        goal_boxes = target_boxes[-1*num_goals:] 
+#        self.goal_img_names = [name for _,name in goal_boxes]
+#        self.max_area = target_boxes[-1][0]
         self.destination_imgs = json.load(open(os.path.join(self.AVD_path,
                                                             scene,
                                                             'destination_images.json')))
@@ -182,16 +162,22 @@ class AVDEnv(gym.Env):
             #self.target_imgs = self.match_and_concat_images_list(target_imgs)
             self.target_imgs = self.resize_target_images(target_imgs,size=self.target_img_shape)
         except:
-            self.target_imgs = np.zeros((2,) + self.target_img_shape)
+            self.target_imgs = np.zeros(self.target_img_shape)
                
         self.observation_space = Dict({'scene_image': Box(low=0,high=255,
-                                                         #shape=(960,540,3),
-                                                         shape=self.scene_img_shape,
+                                                         shape=(960,540,3),
                                                          dtype=np.uint8),
                                         'target_image': Box(low=0,high=255,
                                                  shape=self.target_imgs.shape,
                                                  dtype=np.uint8)})
   
+        #pick initial frame 
+        #self.current_scene_info = self.dataset[random.choice(range(len(self.dataset)))]
+        self.initial_positions = json.load(open(os.path.join(self.AVD_path,
+                                                            scene,
+                                                            'AOS_initial_positions.json')))
+        starting_poses = self.initial_positions[str(self.chosen_inst_id)] 
+        starting_name = random.choice(starting_poses)
         starting_index = self.dataset.get_name_index(starting_name)
         self.current_scene_info = self.dataset[starting_index]
 
@@ -202,20 +188,6 @@ class AVDEnv(gym.Env):
         self.num_steps = 0
         return  self.current_obs
 
-#        #set goal points...top 5 biggest boxes of target in sene
-#        annotations = json.load(open(os.path.join(self.AVD_path,scene,'annotations.json')))
-#        target_boxes = []
-#        for img_name in annotations.keys():
-#            boxes = annotations[img_name]['bounding_boxes']
-#            for box in boxes:
-#                if box[4] == self.chosen_inst_id:
-#                    area = (box[3]-box[1])*(box[2]-box[0])
-#                    target_boxes.append((area,img_name))
-#        target_boxes.sort(key=lambda tup: tup[0])
-#        num_goals = min(len(target_boxes), 5)
-#        goal_boxes = target_boxes[-1*num_goals:] 
-#        self.goal_img_names = [name for _,name in goal_boxes]
-#        self.max_area = target_boxes[-1][0]
 
 
 
@@ -225,7 +197,6 @@ class AVDEnv(gym.Env):
                    AVD_path='', 
                    target_path=None,
                    choose_sequentially=False,
-                   reset_on_done=False,
                    max_steps=3000):
         '''
         KWARGS for init:
@@ -256,7 +227,6 @@ class AVDEnv(gym.Env):
         self.target_path = target_path
         self.max_steps = max_steps
         self.choose_sequentially = choose_sequentially
-        self.reset_on_done = reset_on_done
         #choose scene_names
         possible_scene_names = [name for name in os.listdir(AVD_path)
                                 if os.path.isdir(os.path.join(AVD_path,name))]
@@ -331,20 +301,12 @@ class AVDEnv(gym.Env):
             self.finished_scenes = []
             self.finished_instances = []
             self.finished_init_pos_inds = []
-            self.current_scene_ind = 0
-            self.current_instance_ind = 0 
-            self.current_init_pos_ind  = -1 
+            self.current_scene = self.scene_names[0]
+            self.current_instance = None
+            self.current_init_pose_ind  = 0
         return None
 
-    def get_current_env_info(self):
-        '''
-        Returns [scene_name, instance_id, initial_position_img_name]
-        '''
-        try:
-            return [self.scene_names[self.current_scene_ind], self.chosen_inst_id,
-                    self.initial_positions[str(self.chosen_inst_id)][self.current_init_pos_ind]]
-        except:
-            return -1
+
 
 
 
@@ -410,7 +372,7 @@ class AVDEnv(gym.Env):
 
 
 
-    def resize_target_images(self,img_list, size=[100,100], random_bg=False):
+    def resize_target_images(img_list, size=[100,100], random_bg=False):
         """
         Stacks image in a list into a single ndarray 
         Input parameters:
