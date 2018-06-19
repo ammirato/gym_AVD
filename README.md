@@ -1,6 +1,9 @@
 
 # AVD Gym Environment
+A starting point for working with the [AVD dataset](http://cs.unc.edu/~ammirato/active_vision_dataset_website/index.html) with an OpenAI Gym style environment. It should be fairly straight forward to change the rewards given, or add in getting depth images from AVD. Ideally this will all be added here before too long.
 
+##The code
+The interesting parts of the code are in `gym_AVD/gym_AVD/envs/AVD_env.py`
 
 ## External Requirements
 * Python 2.X (or probably Python 3)
@@ -22,3 +25,7 @@
 ## Usage
 
 
+
+##TODO
+1. Add depth images option
+2. Add instructions for how to adjust rewards based on things like distance to object, etc. 

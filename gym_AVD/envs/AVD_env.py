@@ -1,7 +1,5 @@
 import gym
-#from gym import error, utils
 from gym.spaces import Discrete,Box, Dict
-#from gym.utils import seeding
 import os
 import random
 import sys
@@ -65,14 +63,6 @@ class AVDEnv(gym.Env):
             self.current_obs = {'scene_image':self.current_scene_info[0],
                                 'target_image': self.target_imgs}
 
-        #r_mult = 50
-        #box = self.current_scene_info[1][0]
-        #area = 0
-        #if len(box) > 0:
-        #    box = box[0]
-        #    area = (box[3]-box[1]) * (box[2]-box[0])
-        ##reward = (area/self.max_area)  * r_mult
-        #reward = (1-(area/self.max_area)) * -.1
         reward= -.1
         done = False
         info = {}
@@ -179,7 +169,6 @@ class AVDEnv(gym.Env):
             for target_type in range(len(chosen_target_paths)):
                 img = cv2.imread(random.choice(chosen_target_paths[target_type]))
                 target_imgs.append(img)
-            #self.target_imgs = self.match_and_concat_images_list(target_imgs)
             self.target_imgs = self.resize_target_images(target_imgs,size=self.target_img_shape)
         except:
             self.target_imgs = np.zeros((2,) + self.target_img_shape)
@@ -201,23 +190,6 @@ class AVDEnv(gym.Env):
 
         self.num_steps = 0
         return  self.current_obs
-
-#        #set goal points...top 5 biggest boxes of target in sene
-#        annotations = json.load(open(os.path.join(self.AVD_path,scene,'annotations.json')))
-#        target_boxes = []
-#        for img_name in annotations.keys():
-#            boxes = annotations[img_name]['bounding_boxes']
-#            for box in boxes:
-#                if box[4] == self.chosen_inst_id:
-#                    area = (box[3]-box[1])*(box[2]-box[0])
-#                    target_boxes.append((area,img_name))
-#        target_boxes.sort(key=lambda tup: tup[0])
-#        num_goals = min(len(target_boxes), 5)
-#        goal_boxes = target_boxes[-1*num_goals:] 
-#        self.goal_img_names = [name for _,name in goal_boxes]
-#        self.max_area = target_boxes[-1][0]
-
-
 
 
     def setup(self,scene_names='Home_001_1', 
@@ -364,7 +336,6 @@ class AVDEnv(gym.Env):
         in_file = open(os.path.join(self.AVD_path,scene_name,'instances_for_AOS.txt'))
         ids = []
         for line in in_file:
-            #ids.append(self.name_to_id[line.split()[0]])
             ids.append(int(line.split()[0]))
         return ids 
 
@@ -374,40 +345,6 @@ class AVDEnv(gym.Env):
             if len(self.target_img_paths[k]) > 0:
                 ids.append(k)
         return ids
-
-    def match_and_concat_images_list(self,img_list, min_size=None):
-        """ 
-        Stacks image in a list into a single ndarray 
-
-        Input parameters:
-            img_list: (list) list of ndarrays, images to be stacked. If images
-                      are not the same shape, zero padding will be used to make
-                      them the same size. 
-
-            min_size (optional): (int) If not None, ensures images are at least
-                                 min_size x min_size. Default: None 
-
-        Returns:
-            (ndarray) a single ndarray with first dimension equal to the 
-            number of elements in the inputted img_list    
-        """
-        #find size all images will be
-        max_rows = 0 
-        max_cols = 0 
-        for img in img_list:
-            max_rows = max(img.shape[0], max_rows)
-            max_cols = max(img.shape[1], max_cols)
-        if min_size is not None:
-            max_rows = max(max_rows,min_size)
-            max_cols = max(max_cols,min_size)
-
-        #resize and stack the images
-        for il,img in enumerate(img_list):
-            resized_img = np.zeros((max_rows,max_cols,img.shape[2]))
-            resized_img[0:img.shape[0],0:img.shape[1],:] = img 
-            img_list[il] = resized_img
-        return np.stack(img_list,axis=0)
-
 
 
     def resize_target_images(self,img_list, size=[100,100], random_bg=False):
