@@ -23,7 +23,7 @@ The interesting parts of the code are in `gym_AVD/gym_AVD/envs/AVD_env.py`
 3. pip install -e .
 
 ## Usage
-
+See the [`AOS_random_baseline.py`](https://github.com/ammirato/AVDB_evaluation/blob/master/AOS_random_baseline.py) for an example using the gym environment to navigate around scenes in AVD.
 
 
 ##TODO
