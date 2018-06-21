@@ -218,8 +218,8 @@ class AVDEnv(gym.Env):
             choose_sequentially (optionial): (bool) if this env should go
                                              sequentially through all combinations 
                                              of scene/instance/starting-position.
-                                             if False, on env.reset(), and random
-                                             combo is chosen. 
+                                             if False, on env.reset(), a random
+                                             combo is chosen instead. 
             max_steps: max number of steps before done
         '''
         #TODO: ensure every scene has at least one chosen instance
