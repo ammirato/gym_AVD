@@ -99,7 +99,7 @@ class AVDEnv(gym.Env):
                 return -1
             #update init pos
             self.initial_positions = json.load(open(os.path.join(self.AVD_path,
-                                                                scene,
+                                                                scene, 'AVDB',
                                                                 'AOS_initial_positions.json')))
             scene_present_ids = list(set(self.get_scenes_instance_ids(scene)) & set(self.instance_ids))
             self.chosen_inst_id = scene_present_ids[self.current_instance_ind]
@@ -137,7 +137,7 @@ class AVDEnv(gym.Env):
             self.chosen_inst_id = random.choice(list(possible_inst_ids))
             #pick initial frame 
             self.initial_positions = json.load(open(os.path.join(self.AVD_path,
-                                                                scene,
+                                                                scene,'AVDB',
                                                                 'AOS_initial_positions.json')))
             starting_poses = self.initial_positions[str(self.chosen_inst_id)] 
             starting_name = random.choice(starting_poses)
@@ -156,7 +156,7 @@ class AVDEnv(gym.Env):
                              fraction_of_no_box=1)
 
         self.destination_imgs = json.load(open(os.path.join(self.AVD_path,
-                                                            scene,
+                                                            scene,'AVDB',
                                                             'destination_images.json')))
         self.goal_img_names = self.destination_imgs[str(self.chosen_inst_id)]
         for ind,img_name in enumerate(self.goal_img_names):
@@ -320,7 +320,7 @@ class AVDEnv(gym.Env):
 
 
 
-    def get_class_id_to_name_dict(self,root,file_name='all_instance_id_map.txt'):
+    def get_class_id_to_name_dict(self,root,file_name='instance_id_map.txt'):
         """
         Returns a dict from integer class id to string name
         """
@@ -333,7 +333,7 @@ class AVDEnv(gym.Env):
 
 
     def get_scenes_instance_ids(self,scene_name):
-        in_file = open(os.path.join(self.AVD_path,scene_name,'instances_for_AOS.txt'))
+        in_file = open(os.path.join(self.AVD_path,scene_name,'AVDB','instances_for_AOS.txt'))
         ids = []
         for line in in_file:
             ids.append(int(line.split()[0]))
